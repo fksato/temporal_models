@@ -1,0 +1,8 @@
+*.pyc
+
+__pycache__
+mkgu.egg-info
+.idea
+
+tests/
+model_performances.py
