@@ -44,7 +44,7 @@ def activations_dataset(group_paths, act_index, group_labels, frames_block_cnt, 
 	group_path_ds = tf.data.Dataset.from_tensor_slices(group_paths)
 	act_index_ds = tf.data.Dataset.from_generator(lambda: indices, tf.int32, output_shapes=[None])
 	labels_ds = tf.data.Dataset.from_generator(lambda: labels, tf.int32, output_shapes=[None])
-	labels_ds = labels_ds.map(lambda x: tf.one_hot(x, 200, dtype=tf.int32))
+	# labels_ds = labels_ds.map(lambda x: tf.one_hot(x, 200, dtype=tf.int32))
 
 	input_dataset = tf.data.Dataset.zip((group_path_ds, act_index_ds, labels_ds))
 	input_dataset = input_dataset. \
@@ -55,15 +55,38 @@ def activations_dataset(group_paths, act_index, group_labels, frames_block_cnt, 
 	return input_dataset
 
 
+def check_valid_indices(group_paths, indices, labels):
+	invalid_group = [group for group in indices.keys() if len(indices[group]) == 0]
+	if len(invalid_group) > 0:
+		_group_paths = [i for ix, i in enumerate(group_paths) if ix not in invalid_group]
+		[(indices.pop(i), labels.pop(i)) for i in invalid_group]
+	else:
+		_group_paths = group_paths
+
+	return _group_paths, indices, labels
+
+
+def package_predictions(paths, predictions):
+	# pickle coords/dims:
+	ds = xr.DataArray(predictions
+	                  , coords={'stim_path': paths
+	                            , 'class': ('predictions', np.arange(predictions.shape[1]))
+	                            , 'probability': ('predictions', np.arange(predictions.shape[1]))}
+	                  , dims=['stim_path', 'predictions'])
+	ds = ds.set_index(predictions=['class', 'probability'], append=True)
+	return ds
+
+
 class LogRegModel:
-	def __init__(self, features, num_class, data_X, data_y, lr=1e-3, fc_dropout_keep_prob=1, weight_decay=None
+	def __init__(self, features, num_class, data_X, data_y, lr=1e-4, fc_dropout_keep_prob=1, weight_decay=None
 	             , activation=None):
 		self.feature_size = features
 		self.num_class = num_class
 		self.n_class = num_class
 		self.weight_decay = weight_decay or 0.5
 		self.fc_dropout_keep_prob = fc_dropout_keep_prob
-		self._opt = tf.train.AdamOptimizer(learning_rate=lr)
+		self.lr = lr
+		self._opt = tf.train.AdamOptimizer(learning_rate=self.lr)
 		self.build(data_X, data_y, activation)
 
 	def build(self, inputs, labels, activation):
@@ -92,24 +115,13 @@ class LogRegModel:
 			logits = self.predictions
 
 			self.classification_error = tf.reduce_mean(
-				tf.nn.sparse_softmax_cross_entropy_with_logits(logits=logits, labels=tf.argmax(input_labels, axis=1
-				                                                                               , output_type=tf.int32)))
+				tf.nn.sparse_softmax_cross_entropy_with_logits(logits=logits, labels=input_labels))
 			self.reg_loss = tf.add_n(tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES))
 			self.total_loss = tf.add(self.classification_error, self.reg_loss)
 			self.tvars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
 			self.train_op = self._opt.minimize(self.total_loss, var_list=self.tvars,
 			                                   global_step=tf.train.get_or_create_global_step())
 
-
-def check_valid_indices(group_paths, indices, labels):
-	invalid_group = [group for group in indices.keys() if len(indices[group]) == 0]
-	if len(invalid_group) > 0:
-		_group_paths = [i for ix, i in enumerate(group_paths) if ix not in invalid_group]
-		[(indices.pop(i), labels.pop(i)) for i in invalid_group]
-	else:
-		_group_paths = group_paths
-
-	return _group_paths, indices, labels
 
 
 def fit(graph, model, handle, train_iterator, val_iterator, train_val_iterator, activations_cnt, val_cnt, num_epoch
@@ -118,7 +130,6 @@ def fit(graph, model, handle, train_iterator, val_iterator, train_val_iterator, 
 		sess.run([tf.global_variables_initializer()])
 		train_val_string = sess.run(train_val_iterator.string_handle())
 
-		# model.saver.restore(sess, f'/braintree/home/fksato/Projects/models/log_regression/check_points/alexnet-20.ckpt')
 		for step in tqdm.tqdm(range(num_epoch), unit_scale=1, desc="Epoch Training"):
 			sess.run(train_iterator)
 			for minibatch_train in tqdm.tqdm(range(0, activations_cnt, batch_size), unit_scale=batch_size
@@ -148,10 +159,10 @@ def fit(graph, model, handle, train_iterator, val_iterator, train_val_iterator, 
 				print(f'Validation loss: {val_loss:.4f}, regularization loss: {val_reg_loss:.4f}\n')
 				if checkpoint_save:
 					model.saver.save(sess, f'/braintree/home/fksato/Projects/models/'
-					f'log_regression/check_points/{mdl_name}.ckpt')
+					f'log_regression/check_points/{mdl_name}-{model.lr}-t-test.ckpt')
 		if checkpoint_save:
 			model.saver.save(sess, f'/braintree/home/fksato/Projects/models/log_regression/check_points/'
-			f'{mdl_name}_final.ckpt')
+			f'{mdl_name}_final-t-test.ckpt')
 
 
 def predict(graph, model, mdl_name, iter_get_next, test_cnt, batch_size, save_load=False, gpu_options=None):
@@ -160,13 +171,13 @@ def predict(graph, model, mdl_name, iter_get_next, test_cnt, batch_size, save_lo
 	with tf.Session(graph=graph, config=tf.ConfigProto(gpu_options=gpu_options)) as sess:
 		if save_load:
 			model.saver.restore(sess, f'/braintree/home/fksato/Projects/models/log_regression/check_points/'
-				f'{mdl_name}_final.ckpt')
+				f'{mdl_name}-{model.lr}-t-test.ckpt')
 
 		sess.run([tf.global_variables_initializer()])
 		for minibatch_test in tqdm.tqdm(range(0, test_cnt, batch_size), unit_scale=batch_size
 				, desc="Testing"):
 			try:
-				frame_paths, predictions = sess.run([iter_get_next[0], model.predictions])
+				frame_paths, labels, predictions = sess.run([iter_get_next[0], iter_get_next[2], model.predictions])
 				if preds is None:
 					preds = package_predictions(frame_paths, predictions)
 				else:
@@ -176,18 +187,7 @@ def predict(graph, model, mdl_name, iter_get_next, test_cnt, batch_size, save_lo
 	return preds
 
 
-def package_predictions(paths, predictions):
-	# pickle coords/dims:
-	ds = xr.DataArray(predictions
-	                  , coords={'stim_path': paths
-	                            , 'class': ('predictions', np.arange(predictions.shape[1]))
-	                            , 'probability': ('predictions', np.arange(predictions.shape[1]))}
-	                  , dims=['stim_path', 'predictions'])
-	ds = ds.set_index(predictions=['class', 'probability'], append=True)
-	return ds
-
-
-def main(train, mdl_code, batch_size=64, num_epoch=1000, log_rate=10, TOL=1e-4, verbose=True, save_load=False
+def main(train, mdl_code, batch_size=64, lr=1e-4, num_epoch=1000, log_rate=10, TOL=1e-4, verbose=True, save_load=False
          , *args, **kwargs):
 	from models import HACS_ACTION_CLASSES as actions
 	from utils.mdl_utils import get_tain_test_groups
@@ -201,6 +201,7 @@ def main(train, mdl_code, batch_size=64, num_epoch=1000, log_rate=10, TOL=1e-4, 
 	mdl_id = mdl_ids[mdl_code]
 	frames_block_cnt = mdl_frames_blocks[mdl_code]
 	feature_size = input_size[mdl_code]
+	max_vid_count = 25
 
 	num_epoch = num_epoch
 	batch_size = batch_size
@@ -215,8 +216,6 @@ def main(train, mdl_code, batch_size=64, num_epoch=1000, log_rate=10, TOL=1e-4, 
 
 	group_paths = [f'{result_cache_dir}identifier={mdl_id},stimuli_identifier={mdl_name}_full_HACS-200_group_{i}.pkl'
 	               for i in range(81)]
-	assert len(group_paths) == 81
-
 	if verbose:
 		print(f'::::::::LOGISTIC REGRESSION::::::::::::')
 		print(f':::::::::MODEL INFORMATION:::::::::::::')
@@ -231,7 +230,7 @@ def main(train, mdl_code, batch_size=64, num_epoch=1000, log_rate=10, TOL=1e-4, 
 
 	test_size = .1
 	validation_size = .1
-	max_vid_count = 25
+	# max_vid_count = 25
 	vid_dir = '/braintree/home/fksato/HACS_total/training'
 	train_idx, test_idx, val_idx, train_labels, test_labels, val_labels \
 		= get_tain_test_groups(actions, validation_size, test_size, max_vid_count, vid_dir)
@@ -247,7 +246,6 @@ def main(train, mdl_code, batch_size=64, num_epoch=1000, log_rate=10, TOL=1e-4, 
 		test_group_paths, test_idx, test_labels = check_valid_indices(group_paths, test_idx, test_labels)
 		test_cnt = sum([len(test_idx[group]) for group in test_idx.keys()]) * frames_block_cnt
 		weight_decay = None
-
 
 	# mdl:
 	graph = tf.Graph()
@@ -277,7 +275,7 @@ def main(train, mdl_code, batch_size=64, num_epoch=1000, log_rate=10, TOL=1e-4, 
 
 		next_element = iterator.get_next()
 
-		model = LogRegModel(feature_size, num_class, next_element[1], next_element[2], weight_decay=weight_decay
+		model = LogRegModel(feature_size, num_class, next_element[1], next_element[2], lr=lr, weight_decay=weight_decay
 		                    , activation=activation)
 
 	if train:
@@ -288,11 +286,11 @@ def main(train, mdl_code, batch_size=64, num_epoch=1000, log_rate=10, TOL=1e-4, 
 		print(f'saving: {test_cnt/frames_block_cnt}')
 		# reset_index for netcdf serialization:
 		preds = preds.reset_index(['stim_path', 'predictions'])
-		preds.to_netcdf(f'/braintree/home/fksato/temp/{mdl_name}.nc')
+		preds.to_netcdf(f'/braintree/home/fksato/temp/{mdl_name}_with_labels.nc')
 
 
 if __name__=='__main__':
-	#  mdl_code, batch_size=64, num_epoch=1000, log_rate=10, TOL=1e-4, lr=1e-3 (1e-4), verbose=True
+	#  train, mdl_code, batch_size=64, lr=1e-4, num_epoch=1000, log_rate=10, TOL=1e-4, verbose=True, save_load=False
 	import argparse
 
 	parser = argparse.ArgumentParser()
@@ -302,12 +300,14 @@ if __name__=='__main__':
 	parser.add_argument("save_load", type=lambda x: (str(x).lower() in ['true','1', 'yes'])
 	                    , help="1: save/load model for training/predict 0: dont save/load")
 	parser.add_argument("-b", "--batch_size", dest='batch_size', default=64, help="set size of batch")
+	parser.add_argument("-r", "--lr", dest='lr', default=1e-4, help="learning rate", type=float)
 	parser.add_argument("-e", "--num_epoch", dest='num_epoch', default=1000, type=int)
 	parser.add_argument("-l", "--log_rate", dest='log_rate', default=10, type=int)
 	parser.add_argument("-t", "--tolerance", dest='TOL', default=1e-4, type=float)
 	parser.add_argument("-v", "--verbose", dest='verbose', action="store_true", help="verbosity")
 	args = parser.parse_args()
-
 	main(**vars(args))
+
+	# main(False, '3', 64, 1000, log_rate=10, TOL=1e-3, verbose=False, save_load=False)
 	# main('0', verbose=False)
 

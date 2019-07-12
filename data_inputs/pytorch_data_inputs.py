@@ -102,6 +102,7 @@ class Torch_di(DataInput):
 		self.collate_fn = collate_fn
 		self.stim_paths = None
 		self.iterator = None
+		self.units = frames_per_video
 
 	def make_from_paths(self, paths):
 		from torchvision import transforms
@@ -119,14 +120,13 @@ class Torch_di(DataInput):
 
 		self.iterator = iter(self.dataloader)
 
-	# TODO: remove get_next_stim
-	def get_next_stim(self):
-		data = next(self.iterator)
-		self.stim_paths = list(data[1])
-		return data[0]
-
-	def get_stim_paths(self):
-		return self.stim_paths
+	# def get_next_stim(self):
+	# 	data = next(self.iterator)
+	# 	self.
+	# 	return data[0]
+	#
+	# def get_stim_paths(self):
+	# 	return self.stim_paths
 
 
 if __name__=='__main__':

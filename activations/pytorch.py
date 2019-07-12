@@ -25,9 +25,9 @@ class PytorchVideoWrapper(PytorchWrapper):
 		return self._get_activations(layer_names)
 
 	def _get_activations(self, layer_names):
-		# for im_batch, batch in enumerate(dataloader):
-		# TODO: reomve self.data_inputs.get_next_stim()
-		images = self._data_inputs.get_next_stim().to(self._device)
+		data = next(self._data_inputs.iterator)
+		images = data[0].to(self._device)
+		stim_paths = list(data[1])
 		self._model.eval()
 
 		layer_results = OrderedDict()
@@ -41,4 +41,4 @@ class PytorchVideoWrapper(PytorchWrapper):
 		self._model(images)
 		for hook in hooks:
 			hook.remove()
-		return layer_results
+		return stim_paths, layer_results

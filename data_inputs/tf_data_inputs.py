@@ -154,16 +154,17 @@ def video_data_inputs(video_paths
 
 		input_dataset = tf.data.Dataset.zip((input_dataset, stim_path_label_dataset))
 
-	if repeat:
-		input_dataset.repeat()
-	if shuffle:
-		input_dataset.shuffle(buffer_size=batch_size)
+	# if repeat:
+	# 	input_dataset.repeat()
+	# if shuffle:
+	# 	input_dataset.shuffle(buffer_size=batch_size)
 
 	input_dataset.prefetch(buffer_size=prefetch)
-	iterator = tf.data.Iterator.from_structure(input_dataset.output_types, input_dataset.output_shapes)
-	iterator_init_op = iterator.make_initializer(input_dataset)
-	#TODO: return iterator instead of iterator_init_op, iterator.get_next()
-	return iterator_init_op, iterator.get_next()
+
+	iterator = input_dataset.make_one_shot_iterator()
+	# iterator = tf.data.Iterator.from_structure(input_dataset.output_types, input_dataset.output_shapes)
+	# iterator_init_op = iterator.make_initializer(input_dataset)
+	return iterator
 
 
 def paths_iterator(vid_paths, t_window, block_starts, repeat=False, shuffle=False
@@ -260,10 +261,12 @@ class TF_di(DataInput):
 		self.num_procs = num_procs
 		self.block_starts = block_stride_starts(frames_per_video, t_window)
 		self.stim_paths = None
+		self.units = len(self.block_starts)
 
 
 	def make_from_paths(self, paths):
-		init_op, self.iterator = video_data_inputs(paths, frames_per_video=self.fpv, block_starts=self.block_starts
+		# init_op,
+		self.iterator = video_data_inputs(paths, frames_per_video=self.fpv, block_starts=self.block_starts
 		                                                , preprocess_type=self.preprocess_type
 		                                                , labels=self.labels
 		                                                , t_window=self._t_window
@@ -271,14 +274,5 @@ class TF_di(DataInput):
 		                                                , repeat=self.repeat, shuffle=self.shuffle
 		                                                , batch_size=self.batch_size, prefetch=self.prefetch
 		                                                , num_procs=self.num_procs)
-		self._session.run([init_op])
-
-	#TODO: remove get_next_stim
-	def get_next_stim(self):
-		data = self._session.run(self.iterator)
-		self.stim_paths = list(data[1])
-		#store paths:
-		return data[0]
-
-	def get_stim_paths(self):
-		return self.stim_paths
+		# self._session.run([init_op])
+		self.next_elem = self.iterator.get_next()

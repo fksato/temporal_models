@@ -17,11 +17,11 @@ class DataInput:
 	def make_from_paths(self, paths):
 		pass
 
-	def get_next_stim(self):
-		pass
-
-	def get_stim_paths(self):
-		pass
+	# def get_next_stim(self):
+	# 	pass
+	#
+	# def get_stim_paths(self):
+	# 	pass
 
 
 def split_frames(src_vid, path, start, num_frames):

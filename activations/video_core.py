@@ -6,12 +6,12 @@ from tqdm import tqdm
 
 from model_tools.activations.core import ActivationsExtractorHelper
 
-from brainio_base.assemblies import NeuroidAssembly
+from brainio_base.assemblies import NeuroidAssembly, walk_coords, merge_data_arrays
 from model_tools.activations.core import flatten
 
 class VideoActivationsExtractorHelper(ActivationsExtractorHelper):
 
-	def __init__(self, data_inputs=None, batch_size=60, *args, **kwargs):
+	def __init__(self, data_inputs=None, batch_size=64, *args, **kwargs):
 
 		super(VideoActivationsExtractorHelper, self).__init__(batch_size=batch_size, *args, **kwargs)
 		# TODO: remove datainputs dependencies
@@ -24,15 +24,12 @@ class VideoActivationsExtractorHelper(ActivationsExtractorHelper):
 		:param stimuli_paths: paths to stimulus (type: list)
 		:return:
 		"""
-		total = len(stimuli_paths) * self.data_inputs.fpv   # process length calculation for tqdm
 		# create inputs from paths:
-		self._inputs = self.data_inputs.make_from_paths(stimuli_paths) #TODO: remove datainputs dependencies
-		# stimulate layer in batches (self._batch_size):
-		stim_paths, layer_activations = self._get_activations_batched(total, layers, self._batch_size)
-		# comnbine activation batches and return assembly:
-		return self._package(layer_activations, stim_paths)
+		self.data_inputs.make_from_paths(stimuli_paths)
+		total_data_len = len(stimuli_paths) * self.data_inputs.units
+		return self._get_activations_batched(total_data_len, layers, self._batch_size)
 
-	def _get_activations_batched(self, path_len, layers, batch_size):
+	def _get_activations_batched(self, total_data_len, layers, batch_size):
 		"""
 		Same as in model-tools, overrides call to self._get_batch_activations
 		self.get_activations batched activations automatically
@@ -42,24 +39,51 @@ class VideoActivationsExtractorHelper(ActivationsExtractorHelper):
 		:return:
 		"""
 		layer_activations = None
-		stim_paths = []
-		for batch_start in tqdm(range(0, path_len, batch_size), unit_scale=batch_size, desc="activations"):
-			batch_end = min(batch_start + batch_size, path_len)
-			self._logger.debug('Batch %d->%d/%d', batch_start, batch_end, path_len)
-			batch_activations = self.get_activations(layer_names=layers)
-			# TODO: remove get_stim_paths (remove datainputs dependencies)
-			stim_paths += self.data_inputs.get_stim_paths()
+		for batch_start in tqdm(range(0, total_data_len, batch_size), unit_scale=batch_size, desc="activations"):
+			try:
+				stim_paths, batch_activations = self.get_activations(layer_names=layers)
+			except:
+				break
 			assert isinstance(batch_activations, OrderedDict)
 			for hook in self._batch_activations_hooks.copy().values():  # copy to avoid handle re-enabling messing with the loop
 				batch_activations = hook(batch_activations)
 
 			if layer_activations is None:
 				layer_activations = copy.copy(batch_activations)
+				for layer_name, layer_output in batch_activations.items():
+					layer_activations[layer_name] = self._package_layer(layer_output, layer_name, stim_paths)
 			else:
 				for layer_name, layer_output in batch_activations.items():
-					layer_activations[layer_name] = np.concatenate((layer_activations[layer_name], layer_output))
+					layer_output_pkg = self._package_layer(layer_output, layer_name, stim_paths)
+					layer_activations[layer_name] = merge_data_arrays((layer_activations[layer_name], layer_output_pkg))
 
-		return stim_paths, layer_activations
+		# return stim_paths, layer_activations
+		return self._package(layer_activations, stimuli_paths)
+
+	def _package(self, layer_activations, stimuli_paths):
+		layer_assemblies = [layer_activations_assemblies for layer, layer_activations_assemblies
+		                    in layer_activations.items()]
+
+		# merge manually instead of using merge_data_arrays since `xarray.merge` is very slow with these large arrays
+		self._logger.debug("Merging layer assemblies")
+		model_assembly = np.concatenate([a.values for a in layer_assemblies],
+		                                axis=layer_assemblies[0].dims.index('neuroid'))
+		nonneuroid_coords = {coord: (dims, values) for coord, dims, values in walk_coords(layer_assemblies[0])
+		                     if set(dims) != {'neuroid'}}
+		neuroid_coords = {coord: [dims, values] for coord, dims, values in walk_coords(layer_assemblies[0])
+		                  if set(dims) == {'neuroid'}}
+		for layer_assembly in layer_assemblies[1:]:
+			for coord in neuroid_coords:
+				neuroid_coords[coord][1] = np.concatenate((neuroid_coords[coord][1], layer_assembly[coord].values))
+			assert layer_assemblies[0].dims == layer_assembly.dims
+			for dim in set(layer_assembly.dims) - {'neuroid'}:
+				for coord in layer_assembly[dim].coords:
+					assert (layer_assembly[coord].values == nonneuroid_coords[coord][1]).all()
+		neuroid_coords = {coord: (dims_values[0], dims_values[1])  # re-package as tuple instead of list for xarray
+		                  for coord, dims_values in neuroid_coords.items()}
+		model_assembly = type(layer_assemblies[0])(model_assembly, coords={**nonneuroid_coords, **neuroid_coords},
+		                                           dims=layer_assemblies[0].dims)
+		return model_assembly
 
 	def _package_layer(self, layer_activations, layer, stimuli_paths):
 		"""
