@@ -1,5 +1,5 @@
 from r3Dconv import R25DNet_V1
-from data_inputs.tf_data_inputs import TF_di
+from data_inputs.tf_data_inputs import TensorflowVideoDataInput
 from activations.tensorflow import TensorflowVideowrapper
 from brainscore.utils import fullname
 
@@ -36,7 +36,7 @@ class TensorflowR3DModel:
 		session.run(tf.global_variables_initializer())
 		data_input_kwargs['session'] = session
 		#TODO: remove datainputs dependencies
-		data_inputs = TF_di(**data_input_kwargs)
+		data_inputs = TensorflowVideoDataInput(**data_input_kwargs)
 		TensorflowR3DModel._restore_weights(net_name, session)
 		wrapper = TensorflowVideowrapper(data_inputs=data_inputs, identifier=identifier
 		                                 , inputs=placeholder, endpoints=endpoints, session=session)
@@ -75,7 +75,7 @@ class TensorflowSlimVidModel:
 		session.run(tf.global_variables_initializer())
 		data_input_kwargs['session'] = session
 		# TODO: remove datainputs dependencies
-		data_inputs = TF_di(**data_input_kwargs)
+		data_inputs = TensorflowVideoDataInput(**data_input_kwargs)
 		TensorflowSlimVidModel._restore_imagenet_weights(identifier, session)
 		wrapper = TensorflowVideowrapper(data_inputs=data_inputs, identifier=identifier
 		                                 , inputs=placeholder, endpoints=endpoints, session=session)

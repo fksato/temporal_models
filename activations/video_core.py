@@ -19,7 +19,6 @@ class VideoActivationsExtractorHelper(ActivationsExtractorHelper):
 
 	def _from_paths(self, layers, stimuli_paths):
 		"""
-
 		:param layers: layers to stimulate (type: list)
 		:param stimuli_paths: paths to stimulus (type: list)
 		:return:
@@ -33,57 +32,39 @@ class VideoActivationsExtractorHelper(ActivationsExtractorHelper):
 		"""
 		Same as in model-tools, overrides call to self._get_batch_activations
 		self.get_activations batched activations automatically
+		if we can get the size, we can allocate Layer_activations before
+		=> no need for merge data
 		:param path_len:
 		:param layers:
 		:param batch_size:
 		:return:
 		"""
 		layer_activations = None
+		stimulus_paths = []
 		for batch_start in tqdm(range(0, total_data_len, batch_size), unit_scale=batch_size, desc="activations"):
 			try:
 				stim_paths, batch_activations = self.get_activations(layer_names=layers)
 			except:
 				break
+
 			assert isinstance(batch_activations, OrderedDict)
 			for hook in self._batch_activations_hooks.copy().values():  # copy to avoid handle re-enabling messing with the loop
 				batch_activations = hook(batch_activations)
 
+			stimulus_paths += list(stim_paths)
 			if layer_activations is None:
-				layer_activations = copy.copy(batch_activations)
+				layer_activations = OrderedDict({layer: np.zeros((total_data_len, *batch_activations[layer].shape[1:]))
+				                                 for layer in layers})
 				for layer_name, layer_output in batch_activations.items():
-					layer_activations[layer_name] = self._package_layer(layer_output, layer_name, stim_paths)
+					subset_idx = np.arange(batch_start, batch_start+layer_output.shape[0], 1)
+					layer_activations[layer_name][subset_idx] = layer_output
 			else:
 				for layer_name, layer_output in batch_activations.items():
-					layer_output_pkg = self._package_layer(layer_output, layer_name, stim_paths)
-					layer_activations[layer_name] = merge_data_arrays((layer_activations[layer_name], layer_output_pkg))
+					subset_idx = np.arange(batch_start, batch_start + layer_output.shape[0], 1)
+					layer_activations[layer_name][subset_idx] = layer_output
 
-		# return stim_paths, layer_activations
-		return self._package(layer_activations, stimuli_paths)
+		return self._package(layer_activations, stimulus_paths)
 
-	def _package(self, layer_activations, stimuli_paths):
-		layer_assemblies = [layer_activations_assemblies for layer, layer_activations_assemblies
-		                    in layer_activations.items()]
-
-		# merge manually instead of using merge_data_arrays since `xarray.merge` is very slow with these large arrays
-		self._logger.debug("Merging layer assemblies")
-		model_assembly = np.concatenate([a.values for a in layer_assemblies],
-		                                axis=layer_assemblies[0].dims.index('neuroid'))
-		nonneuroid_coords = {coord: (dims, values) for coord, dims, values in walk_coords(layer_assemblies[0])
-		                     if set(dims) != {'neuroid'}}
-		neuroid_coords = {coord: [dims, values] for coord, dims, values in walk_coords(layer_assemblies[0])
-		                  if set(dims) == {'neuroid'}}
-		for layer_assembly in layer_assemblies[1:]:
-			for coord in neuroid_coords:
-				neuroid_coords[coord][1] = np.concatenate((neuroid_coords[coord][1], layer_assembly[coord].values))
-			assert layer_assemblies[0].dims == layer_assembly.dims
-			for dim in set(layer_assembly.dims) - {'neuroid'}:
-				for coord in layer_assembly[dim].coords:
-					assert (layer_assembly[coord].values == nonneuroid_coords[coord][1]).all()
-		neuroid_coords = {coord: (dims_values[0], dims_values[1])  # re-package as tuple instead of list for xarray
-		                  for coord, dims_values in neuroid_coords.items()}
-		model_assembly = type(layer_assemblies[0])(model_assembly, coords={**nonneuroid_coords, **neuroid_coords},
-		                                           dims=layer_assemblies[0].dims)
-		return model_assembly
 
 	def _package_layer(self, layer_activations, layer, stimuli_paths):
 		"""
@@ -117,4 +98,34 @@ class VideoActivationsExtractorHelper(ActivationsExtractorHelper):
 
 	#TODO: def _package(self, layer_activations, stimuli_paths) may be a performance issue for very large datasets
 	#TODO: Idea: merge activations after each batch in get_activations_batch
+
+
+if __name__=="__main__":
+	import torch
+	from utils.mdl_utils import mask_unused_gpus, get_vid_paths
+	from models.torch_mdl import pytorch_model
+	from models import HACS_ACTION_CLASSES as action_classes
+
+	gpus_list = mask_unused_gpus()
+	use_cuda = torch.cuda.is_available()
+	device = torch.device(f"cuda:{gpus_list[0] + 1}" if use_cuda else "cpu")
+	batch = 2
+	num_procs = 4
+	main_vid_dir = '/braintree/home/fksato/HACS_total/training'
+	stim_trial = 'full_HACS-200'
+
+	#### MDL-specific
+	mdl_name = 'resnet18'
+	layers = ['avgpool']
+	imsize = 224
+	####
+
+	vid_cnt, vid_paths = get_vid_paths(action_classes, main_vid_dir)
+	vid_paths = vid_paths[0:3]
+
+	# vid_cnts, vid_paths = get_vid_paths(actions_list=action_classes, main_vid_dir=main_vid_dir)
+	di_args = {'batch_size': batch, 'shuffle': False, 'num_workers': num_procs, 'image_size': imsize}
+	test = pytorch_model(mdl_name, data_input_kwargs=di_args)
+
+	a = test(vid_paths, layers)
 

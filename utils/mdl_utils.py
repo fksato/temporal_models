@@ -173,7 +173,7 @@ def get_tain_test_groups(actions, validation_size, testing_size, max_vid_count, 
 	"""
 	train, validation, test split per batched activation files (group)
 	:param actions: action classes in video dataset
-	:param validation_size: size of validation set as a percentage of total
+	:param validation_size: size of validation set as a percentage of total training size
 	:param testing_size: size of testing set as a percentage of total
 	:param max_vid_count: max video count per action per batchced activation files (group)
 	:param vid_dir: main video directory where videos are stored: path structure: <vid_dir>/<action>/*.mp4
@@ -189,14 +189,11 @@ def get_tain_test_groups(actions, validation_size, testing_size, max_vid_count, 
 	testing_idx = {action: np.random.choice(vidset_size, int(vidset_size * testing_size), replace=False)
 	                  for action, vidset_size in global_counts.items()}
 
-	temp = {action: [i for i in range(vidset_size) if i not in testing_idx[action]]
+	training_idx = {action: [i for i in range(vidset_size) if i not in testing_idx[action]]
 	                for action, vidset_size in global_counts.items()}
 
 	validation_idx = {action: [indices[i] for i in np.random.choice(len(indices), int(len(indices) * validation_size), replace=False)]
-	               for action, indices in temp.items()}
-
-	training_idx = {action: [i for i in range(vidset_size) if i not in testing_idx[action]]
-	                for action, vidset_size in global_counts.items()}
+	               for action, indices in training_idx.items()}
 
 	group_testing = {group: [] for group in range(max_group)}
 	group_train = {group: [] for group in range(max_group)}

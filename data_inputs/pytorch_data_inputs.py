@@ -90,7 +90,7 @@ def pack_frames(batch):
 
 
 # TODO: remove datainputs dependencies
-class Torch_di(DataInput):
+class PyTorchVideoDataInput(DataInput):
 
 	def __init__(self, batch_size, shuffle, num_workers, frames_per_video=60, image_size=227, collate_fn=pack_frames):
 
@@ -148,13 +148,25 @@ if __name__=='__main__':
 	# vid_dataset = VideoDataSet(vid_paths, labels)
 	# dataloader = DataLoader(vid_dataset, batch_size=4, shuffle=True, num_workers=4, collate_fn=pack_frames)
 
-	di_test = Torch_di(batch_size=1, shuffle=False, num_workers=4, image_size=227, collate_fn=pack_frames)
+	di_test = PyTorchVideoDataInput(batch_size=1, shuffle=False, num_workers=4, image_size=227, collate_fn=pack_frames)
 	di_test.make_from_paths(vid_paths)
-	x = di_test.get_next_stim()
-	s = di_test.get_stim_paths()
-	print(s)
-	in_p = x.to(device)
-	out = alexnet(in_p)
-	print(out)
+	x = next(di_test.iterator)
+
+	from PIL import Image
+
+	test_im_dir = '/braintree/home/fksato/Projects/models/tests/frameImages/pytorch_ds_frames/'
+	#
+	for i, npIm in enumerate(x[0]):
+		npIm = npIm.cpu().detach().numpy()
+		npIm = np.array([ (channel - np.amin(channel))/ (np.amax(channel) - np.amin(channel)) for channel in npIm ])
+		npIm = 255 * npIm
+		npIm = npIm.astype(np.uint8)
+		im = Image.fromarray(npIm.T).convert('RGB')
+		im.save(f'{test_im_dir}check_image_{i}.png')
+	# for im in x[0]:
+	# print(x)
+	# in_p = x[0].to(device)
+	# out = alexnet(in_p)
+	# print(out)
 
 

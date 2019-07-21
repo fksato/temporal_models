@@ -14,7 +14,7 @@ class TensorflowVideowrapper(TensorflowWrapper):
 		:param layers: string of nodes from Res3D to get activations from
 		"""
 		super(TensorflowVideowrapper, self).__init__(*args, **kwargs)
-		self._data_inputs = data_inputs
+		self._data_inputs = data_inputs # func partial
 
 		self._extractor = VideoActivationsExtractorHelper(data_inputs=self._data_inputs #, batch_size=batch_size
 		                                                  , batch_size=self._data_inputs.batch_size
