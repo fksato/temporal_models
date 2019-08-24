@@ -9,9 +9,6 @@ class PytorchVideoWrapper(PytorchWrapper):
 	def __init__(self, data_inputs, *args, **kwargs):
 		super(PytorchVideoWrapper, self).__init__(*args, **kwargs)
 
-		# dataset = ...
-		# self._data_inputs = dataloader(dataset)
-		#TODO: remove datainputs dependencies
 		self._data_inputs = data_inputs
 		#
 		self._extractor = VideoActivationsExtractorHelper(data_inputs=self._data_inputs

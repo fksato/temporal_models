@@ -12,7 +12,7 @@ import numpy as np
 import tqdm
 
 mdls = {'0': 'alexnet', '1': 'resnet18', '2': 'resnet34', '3': 'r2_1-18_l8-kinetics', '4': 'r2_1-34_l32-kinetics+sports1m'}
-mdl_ids = {'0': 'alexnet', '1': 'resnet18', '2': 'resnet34', '3': '<built-in function id>', '4': '<built-in function id>'}
+mdl_ids = {'0': 'alexnet', '1': 'resnet18', '2': 'resnet34', '3': 'r2_1-18_l8-kinetics', '4': 'r2_1-34_l32-kinetics+sports1m'}
 mdl_frames_blocks = {'0': 60, '1': 60, '2': 60, '3': 1, '4': 1}
 groupped_max_vid_cnt = {'0': 2, '1': 25, '2': 25, '3': 25, '4': 15}
 groupped_path_cnt = {'0': 2, '1': 25, '2': 25, '3': 25, '4': 15}

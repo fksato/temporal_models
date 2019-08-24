@@ -19,24 +19,26 @@ class DefaultGPUConfig:
 #TODO: replace "placeholder" with iterator.get_next() to avoid using feed_dict
 class TensorflowR3DModel:
 	@staticmethod
-	def init(identifier, net_name, model_ctr_kwargs=None, data_input_kwargs=None):
+	# def init(identifier, net_name, time_depth, model_ctr_kwargs=None, data_input_kwargs=None):
+	def init(identifier, net_name, time_depth, **kwargs):
+
 		import tensorflow as tf
 		placeholder = tf.placeholder(dtype=tf.float32
-		                             , shape=[None, data_input_kwargs['t_window']
-									 , data_input_kwargs['im_height']
-		                             , data_input_kwargs['im_width']
+		                             , shape=[None, time_depth
+									 , kwargs['im_height']
+		                             , kwargs['im_width']
 		                             , 3])
 
-		model = R25DNet_V1(**model_ctr_kwargs)
+		model = R25DNet_V1(**kwargs)
 		_, endpoints = model.build_graph(placeholder, train_mode=False)
 
 		net_name = net_name or identifier
 
 		session = tf.Session(config=tf.ConfigProto(gpu_options=DefaultGPUConfig.gpu_config))
-		session.run(tf.global_variables_initializer())
-		data_input_kwargs['session'] = session
+		# data_input_kwargs['session'] = session
 		#TODO: remove datainputs dependencies
-		data_inputs = TensorflowVideoDataInput(**data_input_kwargs)
+		data_inputs = TensorflowVideoDataInput(session=session, **kwargs)
+		session.run(tf.global_variables_initializer())
 		TensorflowR3DModel._restore_weights(net_name, session)
 		wrapper = TensorflowVideowrapper(data_inputs=data_inputs, identifier=identifier
 		                                 , inputs=placeholder, endpoints=endpoints, session=session)
@@ -53,29 +55,27 @@ class TensorflowR3DModel:
 #TODO: inherit from TensorflowSlimModel since the only difference is init()
 class TensorflowSlimVidModel:
 	@staticmethod
-	def init(identifier, net_name=None, labels_offset=1, model_ctr_kwargs=None, data_input_kwargs=None):
+	def init(identifier, net_name=None, labels_offset=1, **kwargs):
 		import tensorflow as tf
 		from nets import nets_factory
 
 		placeholder = tf.placeholder(dtype=tf.float32
 		                             , shape=[None
-									 , data_input_kwargs['im_height']
-		                             , data_input_kwargs['im_width']
+									 , kwargs['im_height']
+		                             , kwargs['im_width']
 		                             , 3])
 
 		net_name = net_name or identifier
 		model_ctr = nets_factory.get_network_fn(net_name, num_classes=labels_offset + 1000, is_training=False)
-		logits, endpoints = model_ctr(placeholder, **(model_ctr_kwargs or {}))
+		logits, endpoints = model_ctr(placeholder, **(kwargs or {}))
 		if 'Logits' in endpoints:  # unify capitalization
 			endpoints['logits'] = endpoints['Logits']
 			del endpoints['Logits']
 
 		session = tf.Session(config=tf.ConfigProto(gpu_options=DefaultGPUConfig.gpu_config))
-		# session = tf.Session()
 		session.run(tf.global_variables_initializer())
-		data_input_kwargs['session'] = session
 		# TODO: remove datainputs dependencies
-		data_inputs = TensorflowVideoDataInput(**data_input_kwargs)
+		data_inputs = TensorflowVideoDataInput(session=session, **kwargs)
 		TensorflowSlimVidModel._restore_imagenet_weights(identifier, session)
 		wrapper = TensorflowVideowrapper(data_inputs=data_inputs, identifier=identifier
 		                                 , inputs=placeholder, endpoints=endpoints, session=session)

@@ -24,20 +24,6 @@ class TensorflowVideowrapper(TensorflowWrapper):
 
 		self._extractor.insert_attrs(self)
 
-	"""
-	def make_from_paths(self, paths):
-		# init_op,
-		self.iterator = video_data_inputs(paths, frames_per_video=self.fpv, block_starts=self.block_starts
-		                                                , preprocess_type=self.preprocess_type
-		                                                , labels=self.labels
-		                                                , t_window=self._t_window
-		                                                , im_height=self._height, im_width=self._width
-		                                                , repeat=self.repeat, shuffle=self.shuffle
-		                                                , batch_size=self.batch_size, prefetch=self.prefetch
-		                                                , num_procs=self.num_procs)
-		# self._session.run([init_op])
-		self.next_elem = self.iterator.get_next()
-	"""
 
 	def get_activations(self, images=None, layer_names=None):
 		return self._get_activations(layer_names)

@@ -104,7 +104,7 @@ def get_vid_paths(actions_list, main_vid_dir):
 	return action_vid_cnt, action_video_paths
 
 
-def get_batched_vid_paths(actions_list, main_vid_dir, start, max_vid_cnt=25):
+def get_batched_vid_paths(actions_list, main_vid_dir, start, max_vid_cnt):
 	batched_action_video_paths = []
 	for action in actions_list:
 		vid_dir_path = f'{main_vid_dir}/{action}/*.mp4'
@@ -181,6 +181,8 @@ def get_tain_test_groups(actions, validation_size, testing_size, max_vid_count, 
 	:return: dictionary of training, validation, testing coordinates per batched activation files (group)
 	"""
 	import operator
+	np.random.seed(1234)
+
 	global_counts = {action: len(glob(f'{vid_dir}/{action}/*.mp4')) for action in actions}
 	max_group = int(max(global_counts.items(), key=operator.itemgetter(1))[1]/max_vid_count) + 1
 
