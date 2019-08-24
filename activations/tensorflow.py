@@ -16,11 +16,11 @@ class TensorflowVideowrapper(TensorflowWrapper):
 		super(TensorflowVideowrapper, self).__init__(*args, **kwargs)
 		self._data_inputs = data_inputs # func partial
 
-		self._extractor = VideoActivationsExtractorHelper(data_inputs=self._data_inputs #, batch_size=batch_size
+		self._extractor = VideoActivationsExtractorHelper(data_inputs=self._data_inputs
 		                                                  , batch_size=self._data_inputs.batch_size
 		                                                  , identifier=self.identifier
-														  , get_activations=self.get_activations
-														  , preprocessing=None)
+		                                                  , get_activations=self.get_activations
+		                                                  , preprocessing=None)
 
 		self._extractor.insert_attrs(self)
 
