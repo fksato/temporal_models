@@ -103,7 +103,7 @@ class VideoActivationsExtractorHelper(ActivationsExtractorHelper):
 if __name__=="__main__":
 	import torch
 	from utils.mdl_utils import mask_unused_gpus, get_vid_paths
-	from models.torch_mdl import pytorch_model
+	from models.pytorch_model import pytorch_model
 	from models import HACS_ACTION_CLASSES as action_classes
 
 	gpus_list = mask_unused_gpus()

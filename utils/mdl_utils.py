@@ -169,7 +169,7 @@ def _get_group_index(offsets, indices, max_vid_cnt, frames_block_count=0):
 	return group_indices
 
 
-def get_tain_test_groups(actions, validation_size, testing_size, max_vid_count, vid_dir, frames_block_cnt=0):
+def get_train_test_groups(actions, validation_size, testing_size, max_vid_count, vid_dir, frames_block_cnt=0):
 	"""
 	train, validation, test split per batched activation files (group)
 	:param actions: action classes in video dataset
@@ -257,52 +257,3 @@ def mask_unused_gpus(leave_unmasked=1):
 		raise Exception('"nvidia-smi" is probably not installed. GPUs are not masked', e)
 
 	return available_gpus
-
-if __name__=='__main__':
-	# main_vid_dir = '/braintree/home/fksato/Projects/aciton_recognition/vid_buckets'
-	# action_classes = ['Arm wrestling',
-	# 				  'Brushing teeth',
-	# 				  'Doing fencing',
-	# 				  'Horseback riding',
-	# 				  'Hula hoop',
-	# 				  'Rope skipping',
-	# 				  'Swimming']
-	#
-	# vid_cnts, vid_paths = get_vid_paths(action_classes, main_vid_dir)
-	# print(len(vid_paths))
-	# print('check')
-	from models import HACS_ACTION_CLASSES as actions
-	import time
-
-	vid_dir = '/braintree/home/fksato/HACS_total/training'
-	max_vid_count = 25
-
-	frames_block_cnt=60
-	validation_size = .1
-
-	start_time = time.clock()
-	train, test, train_labels, test_labels = get_tain_test_groups(actions, validation_size, max_vid_count, vid_dir)
-	performance = time.clock() - start_time
-	print(f'PERFORMANCE: {performance}')
-	print('check')
-
-	# check_offset = 35
-	# test_action = 'Skateboarding'
-	# double_check = glob(f'{vid_dir}/{test_action}/*.mp4')
-	# check_indices = len(double_check) - check_offset
-	# check_path = double_check[check_indices]
-	# print(f'{check_path}: {check_indices}')
-
-	# g_num = int(check_indices/max_vid_count)
-	# global_counts = {action: len(glob(f'{vid_dir}/{action}/*.mp4')) for action in actions}
-	# test_offset = _make_group_offsets(actions, max_vid_count, global_counts)
-	# idx = _get_group_index(test_offset[test_action], [check_indices], max_vid_count)[g_num][0]
-	#
-	# batched_paths = get_batched_vid_paths(actions_list=actions, main_vid_dir=vid_dir
-	#                                       , start=g_num*25, max_vid_cnt=max_vid_count)
-	#
-	# assert batched_paths[idx] == check_path
-	# print(f'check_group = {g_num}\ncheck_idx = {idx*frames_block_cnt}')
-	#
-	# print('check')
-

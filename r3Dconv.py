@@ -253,7 +253,7 @@ if __name__=='__main__':
 	import tensorflow as tf
 	from utils.mdl_utils import mask_unused_gpus
 
-	from models.tf_mdl import TensorflowR3DModel
+	from models.tensorflow_model import TensorflowR3DModel
 
 	batch_size = 2
 	weight_decay_rate = 0.05
