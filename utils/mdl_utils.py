@@ -3,6 +3,25 @@ import numpy as np
 from glob import glob
 
 
+def round_robin(src_list, num_procs):
+	total = len(src_list)
+	per_proc = int( total/ num_procs)
+	rem = total % num_procs
+	ret_list = [None] * num_procs
+	start = 0
+	end = per_proc
+
+	for i in range(num_procs):
+		ret_list[i] = src_list[start:end]
+		start += per_proc
+		end += per_proc
+
+	for i in range(rem):
+		print(i)
+		ret_list[i].append(src_list[i+start])
+
+	return ret_list
+
 def split_train_test(category_size, validation_size, num_vids_per_cat):
 	"""
 	split videos (per class) into train-validation

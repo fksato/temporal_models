@@ -7,5 +7,5 @@ def pytorch_model(function, **kwargs):
     model_ctr = getattr(module, function)
     #TODO: remove datainputs dependencies
     data_inputs = PyTorchVideoDataInput(**kwargs)
-    wrapper = PytorchVideoWrapper(data_inputs, identifier=function, model=model_ctr(pretrained=True), preprocessing=None)
+    wrapper = PytorchVideoWrapper(data_inputs=data_inputs, model=model_ctr(pretrained=True), preprocessing=None, identifier=function)
     return wrapper

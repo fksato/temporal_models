@@ -44,7 +44,8 @@ class VideoActivationsExtractorHelper(ActivationsExtractorHelper):
 		for batch_start in tqdm(range(0, total_data_len, batch_size), unit_scale=batch_size, desc="activations"):
 			try:
 				stim_paths, batch_activations = self.get_activations(layer_names=layers)
-			except:
+			except Exception as e:
+				print(e)
 				break
 
 			assert isinstance(batch_activations, OrderedDict)
@@ -53,7 +54,7 @@ class VideoActivationsExtractorHelper(ActivationsExtractorHelper):
 
 			stimulus_paths += list(stim_paths)
 			if layer_activations is None:
-				layer_activations = OrderedDict({layer: np.zeros((total_data_len, *batch_activations[layer].shape[1:]))
+				layer_activations = OrderedDict({layer: np.empty((total_data_len, *batch_activations[layer].shape[1:]))*np.nan
 				                                 for layer in layers})
 				for layer_name, layer_output in batch_activations.items():
 					subset_idx = np.arange(batch_start, batch_start+layer_output.shape[0], 1)
@@ -62,6 +63,11 @@ class VideoActivationsExtractorHelper(ActivationsExtractorHelper):
 				for layer_name, layer_output in batch_activations.items():
 					subset_idx = np.arange(batch_start, batch_start + layer_output.shape[0], 1)
 					layer_activations[layer_name][subset_idx] = layer_output
+
+		# drop any empty rows (useful for when videos are not all consistent sizes)
+		for key, val in layer_activations.items():
+			val = np.squeeze(val)
+			layer_activations[key] = val[~np.isnan(val).any(axis=1)]
 
 		return self._package(layer_activations, stimulus_paths)
 
@@ -74,6 +80,7 @@ class VideoActivationsExtractorHelper(ActivationsExtractorHelper):
 		:param stimuli_paths:
 		:return:
 		"""
+		print(layer_activations.shape[0], len(stimuli_paths))
 		assert layer_activations.shape[0] == len(stimuli_paths)
 		activations, flatten_indices = flatten(layer_activations, return_index=True)  # collapse for single neuroid dim
 		assert flatten_indices.shape[1] in [1, 3, 4]  # either convolutional or fully-connected
@@ -96,36 +103,31 @@ class VideoActivationsExtractorHelper(ActivationsExtractorHelper):
 		layer_assembly['neuroid_id'] = 'neuroid', neuroid_id
 		return layer_assembly
 
-	#TODO: def _package(self, layer_activations, stimuli_paths) may be a performance issue for very large datasets
-	#TODO: Idea: merge activations after each batch in get_activations_batch
-
 
 if __name__=="__main__":
-	import torch
-	from utils.mdl_utils import mask_unused_gpus, get_vid_paths
 	from models.pytorch_model import pytorch_model
 	from models import HACS_ACTION_CLASSES as action_classes
 
-	gpus_list = mask_unused_gpus()
-	use_cuda = torch.cuda.is_available()
-	device = torch.device(f"cuda:{gpus_list[0] + 1}" if use_cuda else "cpu")
 	batch = 2
 	num_procs = 4
-	main_vid_dir = '/braintree/home/fksato/HACS_total/training'
-	stim_trial = 'full_HACS-200'
 
 	#### MDL-specific
 	mdl_name = 'resnet18'
 	layers = ['avgpool']
 	imsize = 224
+	frames_per_video = 75
+	video_offset = 0
 	####
 
-	vid_cnt, vid_paths = get_vid_paths(action_classes, main_vid_dir)
-	vid_paths = vid_paths[0:3]
+	vid_paths = ['/braintree/home/fksato/temp/test/testing/action/_6QHqZr734U_1.mp4'
+		, '/braintree/home/fksato/temp/test/testing/action/-3dWoak69HM_167.mp4'
+		, '/braintree/home/fksato/temp/test/testing/action/-90Qh6fmV-w_326.mp4'
+		, '/braintree/home/fksato/temp/test/testing/action/-90Qh6fmV-w_326.mp4']
 
 	# vid_cnts, vid_paths = get_vid_paths(actions_list=action_classes, main_vid_dir=main_vid_dir)
-	di_args = {'batch_size': batch, 'shuffle': False, 'num_workers': num_procs, 'image_size': imsize}
-	test = pytorch_model(mdl_name, data_input_kwargs=di_args)
+	di_args = {'batch_size': batch, 'shuffle': False, 'num_workers': num_procs, 'image_size': imsize
+	           , 'frames_per_video': frames_per_video, 'video_offset': video_offset}
+	test = pytorch_model(mdl_name, **di_args)
 
 	a = test(vid_paths, layers)
 

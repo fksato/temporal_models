@@ -1,5 +1,7 @@
 import pickle as pk
+import os.path
 
+f_path = os.path.abspath(os.path.dirname(__file__))
 # load action class files once:
 
 ## Moments
@@ -33,7 +35,7 @@ class HACSActionClasses:
 
 # Loader
 def load_aciton(dataset):
-	with open(f'../{dataset}_action_classes.pk', 'rb') as f:
+	with open(os.path.join(f_path,f'../{dataset}_action_classes.pk'), 'rb') as f:
 		_action_class = pk.load(f)
 		_action_class = list(_action_class.keys())
 

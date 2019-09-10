@@ -1,5 +1,5 @@
 from r3Dconv import R25DNet_V1
-from data_inputs.tf_data_inputs import TensorflowVideoDataInput
+from data_inputs.tensorflow_data_inputs import TensorflowVideoDataInput
 from activations.tensorflow import TensorflowVideowrapper
 from brainscore.utils import fullname
 
